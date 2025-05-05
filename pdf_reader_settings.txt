@@ -1,7 +1,7 @@
 {
     "recent_files": {
         "C:/Users/himit/Downloads/Quantum Computing for Everyone (The MIT Press) -- Bernhardt, Chris -- MIT Press, Cambridge, 2019 -- The MIT Press -- 9780262039253 -- 630ca8e428e3be3860c9e580ce2bc0a5 -- Anna\u2019s Archive.pdf": {
-            "page": 28,
+            "page": 31,
             "zoom": 1.6000000000000005
         },
         "C:\\Users\\himit\\Downloads\\Abak's Website.pdf": {

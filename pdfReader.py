@@ -110,13 +110,8 @@ class PDFReader:
         self.tk_image = None
         # self.settings_file = "pdf_reader_settings.json"
         self.root.bind("<Configure>", self.on_window_resize)
-        self.root.bind('<Up>', lambda e: self.prev_page())
-        self.root.bind('<Down>', lambda e: self.next_page())
         
-        # Make sure the canvas can receive keyboard focus
-        self.canvas.bind('<1>', lambda e: self.canvas.focus_set())
-        self.canvas.focus_set()  # Set initial focus
-
+        
     def on_mouse_scroll(self, event):
         # Windows and Mac
         if event.num == 5 or (hasattr(event, 'delta') and event.delta < 0):
@@ -209,12 +204,12 @@ class PDFReader:
             self.canvas.yview_moveto(0)
             
             self.update_page_label()
-    def next_page(self, event=None):  # Add event=None parameter
+    def next_page(self):
         if self.doc and self.page_number < len(self.doc) - 1:
             self.page_number += 1
             self.display_page()
 
-    def prev_page(self, event=None):  # Add event=None parameter
+    def prev_page(self):
         if self.doc and self.page_number > 0:
             self.page_number -= 1
             self.display_page()
@@ -418,6 +413,17 @@ class PDFReader:
                 self.canvas.config(
                     scrollregion=(0, 0, max(canvas_width, img_width), self.tk_image.height())
                 )
+
+    def handle_key_press(self, event):
+        if event.keysym == 'Up':
+            self.prev_page()
+        elif event.keysym == 'Down':
+            self.next_page()
+        elif event.keysym == 'Left':
+            self.prev_page()  # Optional left/right navigation
+        elif event.keysym == 'Right':
+            self.next_page()
+        return "break"  # This stops event propagation
 if __name__ == "__main__":
     root = tk.Tk()
     app = PDFReader(root)
