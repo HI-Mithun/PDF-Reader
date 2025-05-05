@@ -7,6 +7,7 @@ import io
 import os
 from nltk.corpus import wordnet as wn
 from tkinter import messagebox
+import winsound
 
 class PDFReader:
     def __init__(self, root):
@@ -20,7 +21,6 @@ class PDFReader:
         self.settings_file = "pdf_reader_settings.txt"
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.load_settings()
-
         # Button frame
         btn_frame = tk.Frame(root, bg='#f0f0f0', padx=10, pady=5)
         btn_frame.pack(fill='x', side='top')
@@ -70,11 +70,6 @@ class PDFReader:
         filemenu.add_command(label="Exit", command=self.on_close)
         menubar.add_cascade(label="File", menu=filemenu)
         root.config(menu=menubar)
-        # Hide sidebar button
-        # tk.Button(btn_frame, text="Toggle Sidebar", command=self.toggle_sidebar,
-        #         bg='#FF5722', fg='white').pack(side='left', padx=5)
-
-        # self.update_sidebar()
 
         # Jump to page input
         self.jump_entry = tk.Entry(btn_frame, width=5)
@@ -82,13 +77,27 @@ class PDFReader:
         tk.Button(btn_frame, text="Go", command=self.jump_to_page,
                 bg='#9C27B0', fg='white').pack(side='right', padx=5)
 
-
-        # Canvas for PDF rendering
+        # Canvas for PDF rendering with scrollbars
         self.canvas_frame = tk.Frame(root)
         self.canvas_frame.pack(fill='both', expand=True)
 
-        self.canvas = tk.Canvas(self.canvas_frame, bg='gray')
+        # Canvas for PDF rendering
+        self.v_scroll = tk.Scrollbar(self.canvas_frame, orient='vertical')
+        self.h_scroll = tk.Scrollbar(self.canvas_frame, orient='horizontal')
+        
+        self.canvas = tk.Canvas(
+            self.canvas_frame,
+            bg='gray',
+            yscrollcommand=self.v_scroll.set,
+            xscrollcommand=self.h_scroll.set
+        )
+        
+        self.v_scroll.pack(side='right', fill='y')
+        self.h_scroll.pack(side='bottom', fill='x')
         self.canvas.pack(side='left', fill='both', expand=True)
+        
+        self.v_scroll.config(command=self.canvas.yview)
+        self.h_scroll.config(command=self.canvas.xview)
 
         # Bind scrolling
         self.canvas.bind("<MouseWheel>", self.on_mouse_scroll)
@@ -100,14 +109,53 @@ class PDFReader:
 
         self.tk_image = None
         # self.settings_file = "pdf_reader_settings.json"
-
+        self.root.bind("<Configure>", self.on_window_resize)
+        self.root.bind('<Up>', lambda e: self.prev_page())
+        self.root.bind('<Down>', lambda e: self.next_page())
+        
+        # Make sure the canvas can receive keyboard focus
+        self.canvas.bind('<1>', lambda e: self.canvas.focus_set())
+        self.canvas.focus_set()  # Set initial focus
 
     def on_mouse_scroll(self, event):
-        if event.num == 5 or event.delta < 0:
-            self.next_page()
-        elif event.num == 4 or event.delta > 0:
-            self.prev_page()
+        # Windows and Mac
+        if event.num == 5 or (hasattr(event, 'delta') and event.delta < 0):
+            # Scroll down or right
+            if event.state == 0:  # Vertical scroll
+                if self._can_scroll_down():
+                    self.canvas.yview_scroll(1, "units")
+                else:
+                    self.next_page()
+            elif event.state == 1:  # Horizontal scroll (Shift+Scroll)
+                if self._can_scroll_right():
+                    self.canvas.xview_scroll(1, "units")
+        
+        elif event.num == 4 or (hasattr(event, 'delta') and event.delta > 0):
+            # Scroll up or left
+            if event.state == 0:  # Vertical scroll
+                if self._can_scroll_up():
+                    self.canvas.yview_scroll(-1, "units")
+                else:
+                    self.prev_page()
+            elif event.state == 1:  # Horizontal scroll (Shift+Scroll)
+                if self._can_scroll_left():
+                    self.canvas.xview_scroll(-1, "units")
 
+    def _can_scroll_down(self):
+        yview = self.canvas.yview()
+        return yview[1] < 1.0
+
+    def _can_scroll_up(self):
+        yview = self.canvas.yview()
+        return yview[0] > 0.0
+
+    def _can_scroll_right(self):
+        xview = self.canvas.xview()
+        return xview[1] < 1.0
+
+    def _can_scroll_left(self):
+        xview = self.canvas.xview()
+        return xview[0] > 0.0
     def open_pdf(self, file_path=None):
         if not file_path:
             file_path = filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
@@ -135,35 +183,65 @@ class PDFReader:
             self.tk_image = ImageTk.PhotoImage(image)
 
             self.canvas.delete("all")
-            self.canvas.config(scrollregion=(0, 0, image.width, image.height))
-
-            # Get canvas dimensions and center the image
+            
+            # Calculate centered position
             canvas_width = self.canvas.winfo_width()
             canvas_height = self.canvas.winfo_height()
-            center_x = max((canvas_width - image.width) // 2, 0)
-            center_y = max((canvas_height - image.height) // 2, 0)
-
-            self.canvas.create_image(center_x, center_y, anchor='nw', image=self.tk_image)
+            img_width = image.width
+            img_height = image.height
+            
+            # Center the image horizontally, align to top vertically
+            x_pos = max((canvas_width - img_width) // 2, 0)
+            y_pos = 0  # Align to top for vertical scrolling
+            
+            # Create the image item and save its ID
+            self.canvas_image = self.canvas.create_image(x_pos, y_pos, anchor='nw', image=self.tk_image)
+            
+            # Set scroll region to cover entire image
+            self.canvas.config(
+                scrollregion=(0, 0, max(canvas_width, img_width), img_height),
+                width=canvas_width,
+                height=canvas_height
+            )
+            
+            # Reset scroll position
+            self.canvas.xview_moveto(0)
+            self.canvas.yview_moveto(0)
+            
             self.update_page_label()
-
-    def next_page(self):
+    def next_page(self, event=None):  # Add event=None parameter
         if self.doc and self.page_number < len(self.doc) - 1:
             self.page_number += 1
             self.display_page()
 
-    def prev_page(self):
+    def prev_page(self, event=None):  # Add event=None parameter
         if self.doc and self.page_number > 0:
             self.page_number -= 1
             self.display_page()
 
     def zoom_in(self):
+        # Get current visible center position
+        x_center = (self.canvas.xview()[0] + self.canvas.xview()[1]) / 2
+        y_center = (self.canvas.yview()[0] + self.canvas.yview()[1]) / 2
+        
         self.zoom += 0.1
         self.display_page()
+        
+        # Restore center position
+        self.canvas.xview_moveto(max(0, x_center - 0.1))
+        self.canvas.yview_moveto(max(0, y_center - 0.1))
 
     def zoom_out(self):
         if self.zoom > 0.2:
+            # Same center preservation as zoom_in
+            x_center = (self.canvas.xview()[0] + self.canvas.xview()[1]) / 2
+            y_center = (self.canvas.yview()[0] + self.canvas.yview()[1]) / 2
+            
             self.zoom -= 0.1
             self.display_page()
+            
+            self.canvas.xview_moveto(min(1, x_center + 0.1))
+            self.canvas.yview_moveto(min(1, y_center + 0.1))
 
     def update_page_label(self):
         if self.doc:
@@ -228,45 +306,39 @@ class PDFReader:
         self.sidebar_visible = not self.sidebar_visible
 
     def on_canvas_click(self, event):
-        if not self.doc:
+        if not self.doc or not hasattr(self, 'canvas_image'):
             return
-
-        # Get the PDF page
-        page = self.doc.load_page(self.page_number)
         
-        # Get the displayed image dimensions
-        img_width = self.tk_image.width()
-        img_height = self.tk_image.height()
-        
-        # Get canvas dimensions
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
-        
-        # Calculate image position (centered)
-        img_x = max((canvas_width - img_width) // 2, 0)
-        img_y = max((canvas_height - img_height) // 2, 0)
-        
-        # Convert click to image coordinates
-        click_x = event.x - img_x
-        click_y = event.y - img_y
-        
-        # Only process clicks that are actually on the image
-        if 0 <= click_x < img_width and 0 <= click_y < img_height:
-            # Convert to PDF coordinates (accounting for zoom)
-            pdf_x = click_x / self.zoom
-            pdf_y = click_y / self.zoom
+        # Get image position on canvas
+        img_bbox = self.canvas.bbox(self.canvas_image)
+        if not img_bbox:
+            return
             
-            # Get all words on the page
+        img_x, img_y, img_x2, img_y2 = img_bbox
+        
+        # Check if click is within the image
+        if (img_x <= event.x <= img_x2 and 
+            img_y <= event.y <= img_y2):
+            
+            # Convert click to image coordinates (accounting for scroll position)
+            scroll_x = self.canvas.canvasx(0)
+            scroll_y = self.canvas.canvasy(0)
+            
+            click_x = (event.x - img_x + scroll_x) / self.zoom
+            click_y = (event.y - img_y + scroll_y) / self.zoom
+            
+            # Get the PDF page
+            page = self.doc.load_page(self.page_number)
             words = page.get_text("words")  # List of (x0, y0, x1, y1, "word", ...)
             
             # Find the word at the clicked position
             for word_info in words:
                 x0, y0, x1, y1, word = word_info[:5]
-                if x0 <= pdf_x <= x1 and y0 <= pdf_y <= y1:
+                if x0 <= click_x <= x1 and y0 <= click_y <= y1:
                     self.lookup_word(word)
                     return
             
-            # If no word found at exact position, show message
+            # If no word found at exact position
             messagebox.showinfo("Dictionary", "No word found at this position.")
 
     def lookup_word(self, word):
@@ -280,6 +352,7 @@ class PDFReader:
             return
 
         definition = meanings[0].definition()
+        winsound.PlaySound(None, winsound.SND_ASYNC)
         messagebox.showinfo(f"Definition of '{word}'", definition)
         
     def capture_selection(self, event):
@@ -328,7 +401,23 @@ class PDFReader:
                 label=filename,
                 command=lambda p=file_path: self.open_pdf(p)
             )
-
+    def on_window_resize(self, event):
+        if hasattr(self, 'tk_image') and hasattr(self, 'canvas_image'):
+            # Re-center the image horizontally
+            bbox = self.canvas.bbox(self.canvas_image)
+            if bbox:
+                current_x = bbox[0]
+                canvas_width = self.canvas.winfo_width()
+                img_width = self.tk_image.width()
+                new_x = max((canvas_width - img_width) // 2, 0)
+                
+                # Move image to new centered position
+                self.canvas.move(self.canvas_image, new_x - current_x, 0)
+                
+                # Update scroll region
+                self.canvas.config(
+                    scrollregion=(0, 0, max(canvas_width, img_width), self.tk_image.height())
+                )
 if __name__ == "__main__":
     root = tk.Tk()
     app = PDFReader(root)
