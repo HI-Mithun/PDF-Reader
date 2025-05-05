@@ -27,7 +27,6 @@ class PDFReader:
 
         tk.Button(btn_frame, text="Open PDF", command=self.open_pdf,
                   bg='#4CAF50', fg='white').pack(side='left', padx=5)
-        self.sidebar_visible = True
         tk.Button(btn_frame, text="Toggle Sidebar", command=self.toggle_sidebar,
                 bg='#9C27B0', fg='white').pack(side='left', padx=5)
 
@@ -42,10 +41,6 @@ class PDFReader:
 
         self.page_label = tk.Label(btn_frame, text="Page: 0/0", bg='#f0f0f0')
         self.page_label.pack(side='right', padx=10)
-
-        # Sidebar frame for file list
-        self.sidebar_frame = tk.Frame(root, width=200, bg='#e0e0e0')
-        self.sidebar_frame.pack(side='left', fill='y')
 
         # Sidebar Treeview for file browsing
         self.sidebar_frame = tk.Frame(root, width=250, bg='#f8f8f8')
@@ -101,11 +96,10 @@ class PDFReader:
         self.canvas.bind("<Button-5>", self.on_mouse_scroll)  # Linux
         self.canvas.bind("<Button-1>", self.on_canvas_click)
         self.canvas.bind("<Button-3>", self.show_context_menu)  # Right-click
-        self.canvas.bind("<ButtonRelease-1>", self.capture_selection)  # Left-click release
         self.selected_word = None
 
         self.tk_image = None
-        self.settings_file = "pdf_reader_settings.json"
+        # self.settings_file = "pdf_reader_settings.json"
 
 
     def on_mouse_scroll(self, event):
@@ -117,14 +111,13 @@ class PDFReader:
     def open_pdf(self, file_path=None):
         if not file_path:
             file_path = filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
-        if file_path:  # After successful open
-            self.update_recent_menu()
         if file_path:
             # Check if we have saved state for this file
             file_state = self.settings["recent_files"].get(file_path, {})
             
             try:
                 self.doc = fitz.open(file_path)
+                self.update_recent_menu()
                 self.page_number = file_state.get("page", 0)
                 self.zoom = file_state.get("zoom", 1.0)
                 self.update_page_label()
