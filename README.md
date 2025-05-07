@@ -6,13 +6,13 @@ Go to the dist folder in this repository.
 
 Download both files:
 
-YourPDFReader.exe (the actual reader app)
+pdfREader.exe (the actual reader app)
 
-dictionary_data.txt (required dictionary data)
+pdf_reader_settings.txt (required dictionary data)
 
 ⚠️ Do not rename or separate these files. They must stay in the same folder.
 
-Run YourPDFReader.exe
+Run pdfREader.exe
 Double-click the .exe to launch the app — no installation needed.
 
 📝 Notes
